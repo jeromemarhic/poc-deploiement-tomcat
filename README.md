@@ -3,29 +3,29 @@
 docker pull stephenreed/jenkins-java8-maven-git
 docker run -d -p 15003:8080 stephenreed/jenkins-java8-maven-git
 
-RÈcupÈrer le mot de passe par dÈfaut dans le fichier /jenkins/secrets/initialAdminPassword
+R√©cup√©rer le mot de passe par d√©faut dans le fichier /jenkins/secrets/initialAdminPassword
 
 Ouvrir un navigateur sur http://127.0.0.1:15003
-Indiquer le mot de passe rÈcupÈrer en amont
-Choississez SÈlectionner les plugins ‡ installer et ajouter
+Indiquer le mot de passe r√©cup√©rer en amont
+Choississez S√©lectionner les plugins √† installer et ajouter
     Conditional BuildStep
     Multijob
     Copy Artifact
     Publish Over SSH
     SSH
-CrÈer le 1er utilisateur Administrateur
+Cr√©er le 1er utilisateur Administrateur
     Nom : jenkins
     Mot de passe  : jenkins
 Menu Jenkins / Administrater Jenkins
-    Mettre ‡ jour la version de Jenkins
+    Mettre √† jour la version de Jenkins
 Menu Jenkins / Identifiants / System / Identifiants globaux
     Ajouter des identifiants
         Type : Nom d'utilisateur et mot de passe
-        PortÈe : Global
+        Port√©e : Global
         Nom d'utilisateur : the-manager
         Mot de passe : needs-a-new-password-here
         ID : tomcat-manager
-        Description : Tomcat manager pour dÈployer les wars
+        Description : Tomcat manager pour d√©ployer les wars
 Menu Jenkins / Administrater Jenkins / Configuration globale des outils
     Ajouter JDK
         Nom : JDK 8
@@ -95,7 +95,7 @@ pipeline {
 
 docker commit 1397ef8425c0 stephenreed/jenkins-java8-maven-git:deploy
 
-Par la suite, pour dÈmarrer Jenkins : docker run -d -p 15003:8080 stephenreed/jenkins-java8-maven-git:deploy
+Par la suite, pour d√©marrer Jenkins : docker run -d -p 15003:8080 stephenreed/jenkins-java8-maven-git:deploy
 
 # MySQL
 
@@ -107,4 +107,45 @@ docker run -d -p 15001:3306 -e MYSQL_ROOT_PASSWORD=database-password mysql:8
 docker pull picoded/tomcat
 docker run -d -p 15002:8080 picoded/tomcat
 
+# SSH
+Sur serveur Tomcat
 
+apt-get update
+apt-get install openssh-server
+G√©n√©rer paire de cl√©s : ssh-keygen
+Aller dans ~/.ssh et renommer id_rsa.pub en authorized_keys
+Modifier le fichier /etc/ssh/sshd.config : 
+ - PermitRootLogin yes
+ - Password authentication no
+
+ service ssh restart
+ service ssh status 
+
+docker commit ID_CONTAINER jenkins_with_client_ssh_for_tomcat
+
+
+Sur serveur jenkins
+
+Dans le dossier ~/.ssh : cr√©er un fichier "key_tomcat" avec comme contenu la cl√© priv√©e "id_rsa" du serveur Tomcat
+Mettre les droits 600 au fichier key_tomcat
+Cr√©er un fichier 'config' avec le contenu suivant :
+Host 172.17.0.4 (v√©rifier l'ip du serveur Tomcat avec la commande "ip a")
+User root
+IdentityFile 
+
+Tester la connexion : ssh root@172.17.0.4
+
+docker commit ID_CONTAINER tomcat_with_server_ssh
+
+Dans admin Jenkins :
+- Ajouter plugin SSH Agent
+- Ajouter un identifiant global "SSH Username with private key"
+- Description : SSH Root Key credentials for Tomcat server
+- user name root
+- Private key, copier le contenu de "key_tomcat"
+
+ - Aller dans Administrer Jenkins et ajouter un SSH Remote Host :
+ * hostname : 172.17.0.4
+ * port : 22
+ * cr√©dentials : selectionner "root (SSH Root key credentials for Tomcat server)"
+ Faire check connection : Successfull connection doit apara√Ætre
